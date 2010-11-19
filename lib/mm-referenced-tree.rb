@@ -102,11 +102,13 @@ module MongoMapper
           set(:reference => ref, :depth => depth)
         end
 
+        # TODO - implement this
         # increases the depth of the node if possible
         # can't indent if there's nothing before it on the same level (to become the new parent)
         def indent
         end
 
+        # TODO - implement this
         # decreases the depth of the node if possible
         # can't outdent further than 1
         def outdent
