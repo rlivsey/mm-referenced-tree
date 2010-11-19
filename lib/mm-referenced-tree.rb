@@ -61,7 +61,9 @@ module MongoMapper
 
             reference[level-1] += 1
 
-            node.set(:reference => reference)
+            if node.reference != reference
+              node.set(:reference => reference)
+            end
           end
         end
       end
@@ -259,6 +261,8 @@ module MongoMapper
           if referenced_tree_options[:scope]
             scope[referenced_tree_options[:scope]] = self[referenced_tree_options[:scope]]
           end
+
+          # TODO - only renumber from the point onwards
           self.class.renumber_tree(scope)
         end
       end
