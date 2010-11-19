@@ -17,10 +17,9 @@ module MongoMapper
           key :depth,     Integer
 
           before_create :assign_reference
+          before_create :reposition_subsequent_nodes
           after_destroy :delete_descendants_and_renumber_siblings
-
-          # on create, renumber subsequent nodes
-          # on update (if reference changed), renumber all subseqent to latest/prev position
+          before_update :renumber_tree_if_reference_changed
         end
 
         # renumber a full set of nodes
@@ -258,13 +257,40 @@ module MongoMapper
             end
           end
 
+          # TODO - should be able to do this without renumbering the whole tree
+          # it's more complicated just decrementing the subsequent nodes though, as some need to change levels
+          #
+          # query = query_for_reference(reference[0, depth-1])
+          # query[:"reference.#{depth-1}"] = {:"$gt" => reference.last - 1}
+          #
+          # self.class.decrement(
+          #   query,
+          #   {:"reference.#{depth-1}" => 1}
+          # )
+
+          renumber_tree
+        end
+
+        # TODO - massively excessive - only renumber the required points
+        # To do that we need to figure out where it's moving from/to etc...
+        def renumber_tree_if_reference_changed
+          renumber_tree if reference_changed?
+        end
+
+        def renumber_tree
           scope = {}
           if referenced_tree_options[:scope]
             scope[referenced_tree_options[:scope]] = self[referenced_tree_options[:scope]]
           end
 
-          # TODO - only renumber from the point onwards
           self.class.renumber_tree(scope)
+        end
+
+        def reposition_subsequent_nodes
+          self.class.set(
+            query_for_reference(reference),
+            {:"reference.#{depth-1}" => (reference[depth-1] + 1)}
+          )
         end
       end
     end
