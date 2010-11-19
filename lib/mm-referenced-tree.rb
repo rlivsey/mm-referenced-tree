@@ -219,9 +219,6 @@ module MongoMapper
           other == self || is_sibling_of?(other)
         end
 
-        def destroy_descendants
-        end
-
         private
 
         def query_for_reference(ref)
