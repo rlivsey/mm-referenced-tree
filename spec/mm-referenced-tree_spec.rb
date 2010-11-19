@@ -33,6 +33,52 @@ describe "MongoMapper::Plugins::ReferencedTree" do
     end
   end
 
+  describe ".renumber_tree" do
+
+    # bugger up the tree by setting the references to non-sensical ones
+    # then when calling Node.renumber_tree it should put it back to its original state
+    # (as long as the general structure & ordering is the same)
+    #
+    # 1                  1
+    # 1.3                1.1
+    # 1.3.1              1.1.1
+    # 1.3.4      =>      1.1.2
+    # 1.3.4.6            1.1.2.1
+    # 1.3.6              1.1.3
+
+    before(:each) do
+      @n_1.set(:reference       => [1])
+      @n_1_1.set(:reference     => [1,3])
+      @n_1_1_1.set(:reference   => [1,3,1])
+      @n_1_1_2.set(:reference   => [1,3,4])
+      @n_1_1_2_1.set(:reference => [1,3,4,6])
+      @n_1_1_3.set(:reference   => [1,3,6])
+    end
+
+    it "should fix the tree's structure by renumbering based on the depths" do
+      Node.renumber_tree(:account_id => @account.id)
+
+      @n_1.reload.reference.should        == [1]
+      @n_1_1.reload.reference.should      == [1,1]
+      @n_1_1_1.reload.reference.should    == [1,1,1]
+      @n_1_1_2.reload.reference.should    == [1,1,2]
+      @n_1_1_2_1.reload.reference.should  == [1,1,2,1]
+      @n_1_1_3.reload.reference.should    == [1,1,3]
+    end
+
+    it "should leave nodes alone which don't need moving" do
+      Node.renumber_tree(:account_id => @account.id)
+
+      @n_2.reload.reference.should        == [2]
+      @n_2_1.reload.reference.should      == [2,1]
+      @n_2_1_1.reload.reference.should    == [2,1,1]
+      @n_2_1_2.reload.reference.should    == [2,1,2]
+      @n_2_1_2_1.reload.reference.should  == [2,1,2,1]
+      @n_2_1_3.reload.reference.should    == [2,1,3]
+    end
+
+  end
+
   describe "on create" do
     describe "with no reference set" do
       it "should set the reference to [1] if it is the only item in the tree" do
@@ -47,6 +93,93 @@ describe "MongoMapper::Plugins::ReferencedTree" do
       end
     end
   end
+
+  describe "#destroy" do
+
+    # 1                  1
+    # 1.1                1.1
+    # 1.1.1              1.1.1
+    # 1.1.2      =>      xxxxx
+    # 1.1.2.1            1.1.1.1
+    # 1.1.3              1.1.2
+
+    it "should renumber siblings and descendants" do
+      @n_1_1_2.destroy
+
+      @n_1.reload.reference.should        == [1]
+      @n_1_1.reload.reference.should      == [1,1]
+      @n_1_1_1.reload.reference.should    == [1,1,1]
+      lambda{ @n_1_1_2.reload }.should raise_error(MongoMapper::DocumentNotFound)
+      @n_1_1_2_1.reload.reference.should  == [1,1,1,1]
+      @n_1_1_3.reload.reference.should    == [1,1,2]
+    end
+
+    # 1                  xxxxx
+    # 1.1                1
+    # 1.1.1              1.1
+    # 1.1.2      =>      1.2
+    # 1.1.2.1            1.2.1
+    # 1.1.3              1.3
+
+    it "should outdent a level if the first root is deleted" do
+      @n_1.destroy
+
+      lambda{ @n_1.reload }.should raise_error(MongoMapper::DocumentNotFound)
+      @n_1_1.reload.reference.should      == [1]
+      @n_1_1_1.reload.reference.should    == [1,1]
+      @n_1_1_2.reload.reference.should    == [1,2]
+      @n_1_1_2_1.reload.reference.should  == [1,2,1]
+      @n_1_1_3.reload.reference.should    == [1,3]
+    end
+
+
+    # 1                  1
+    # 1.1                1.1
+    # 1.1.1              1.1.1
+    # 1.1.2              1.1.2
+    # 1.1.2.1            1.1.2.1
+    # 1.1.3              1.1.3
+    # 2                  xxxx
+    # 2.1                1.2
+    # 2.1.1              1.2.1
+    # 2.1.2      =>      1.2.2
+    # 2.1.2.1            1.2.2.1
+    # 2.1.3              1.2.3
+
+    it "should join trees if a subsequent root is deleted" do
+      @n_2.destroy
+
+      lambda{ @n_2.reload }.should raise_error(MongoMapper::DocumentNotFound)
+      @n_2_1.reload.reference.should      == [1,2]
+      @n_2_1_1.reload.reference.should    == [1,2,1]
+      @n_2_1_2.reload.reference.should    == [1,2,2]
+      @n_2_1_2_1.reload.reference.should  == [1,2,2,1]
+      @n_2_1_3.reload.reference.should    == [1,2,3]
+    end
+
+  end
+
+  describe "#destroy_with_children" do
+
+    # 1                  1
+    # 1.1                1.1
+    # 1.1.1              1.1.1
+    # 1.1.2      =>      xxxxx
+    # 1.1.2.1            xxxxx
+    # 1.1.3              1.1.2
+
+    it "should remove descendants and renumber siblings" do
+      @n_1_1_2.destroy_with_children
+
+      @n_1.reload.reference.should        == [1]
+      @n_1_1.reload.reference.should      == [1,1]
+      @n_1_1_1.reload.reference.should    == [1,1,1]
+      lambda{ @n_1_1_2.reload   }.should raise_error(MongoMapper::DocumentNotFound)
+      lambda{ @n_1_1_2_1.reload }.should raise_error(MongoMapper::DocumentNotFound)
+      @n_1_1_3.reload.reference.should    == [1,1,2]
+    end
+  end
+
 
   describe "#reference=" do
     it "should set the depth to the size of the reference array" do
@@ -71,12 +204,23 @@ describe "MongoMapper::Plugins::ReferencedTree" do
       @n_1.reload
       @n_1.depth.should == 3
     end
+
+    it "should not renumber siblings or descendants" do
+      @n_1.set_reference([1,2,3])
+      @n_1_1.reference.should == [1,1]
+    end
   end
 
   describe "#formatted_reference" do
     it "should join the reference numbers with dots" do
       @n_1_1_2_1.formatted_reference.should == "1.1.2.1"
     end
+  end
+
+  describe "indent" do
+  end
+
+  describe "outdent" do
   end
 
   describe "#parent" do
@@ -135,6 +279,18 @@ describe "MongoMapper::Plugins::ReferencedTree" do
   describe "#siblings" do
     it "should return all nodes on the same level of the tree except itself" do
       @n_2_1_2.siblings.should == [@n_2_1_1, @n_2_1_3]
+    end
+  end
+
+  describe "#previous_siblings" do
+    it "should return all nodes on the same level before the node" do
+      @n_2_1_2.previous_siblings.should == [@n_2_1_1]
+    end
+  end
+
+  describe "#next_siblings" do
+    it "should return all nodes on the same level after the node" do
+      @n_2_1_2.next_siblings.should == [@n_2_1_3]
     end
   end
 

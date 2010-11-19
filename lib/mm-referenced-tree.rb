@@ -17,10 +17,52 @@ module MongoMapper
           key :depth,     Integer
 
           before_create :assign_reference
-
+          after_destroy :delete_descendants_and_renumber_siblings
 
           # on create, renumber subsequent nodes
           # on update (if reference changed), renumber all subseqent to latest/prev position
+        end
+
+        # renumber a full set of nodes
+        # pass the scope into the query to limit it to the nodes you want
+        # Eg. Something.renumber_tree(:account_id => 123)
+        # TODO - make this work on associations, IE account.nodes.renumber_tree
+        def renumber_tree(query={})
+          reference     = [0]
+          level         = 1
+          level_offset  = 0
+
+          where(query).sort(:reference.asc).all.each do |node|
+
+            # it's a level up
+            if node.reference.size > (level + level_offset)
+              if reference == [0]
+                level_offset = 1
+              else
+                level             += 1
+                reference[level-1] = 0
+              end
+
+            # back down a level or more
+            elsif node.reference.size < (level + level_offset)
+              level     = node.depth
+
+              if level_offset > 0
+
+                if level == 1
+                  level_offset = 0
+                else
+                  level -= level_offset
+                end
+              end
+
+              reference = reference[0, level]
+            end
+
+            reference[level-1] += 1
+
+            node.set(:reference => reference)
+          end
         end
       end
 
@@ -28,10 +70,13 @@ module MongoMapper
 
         # removes this node and renumbers siblings and descendants
         def destroy
+          super
         end
 
         # removes this node and all descendants, renumbers siblings
-        def destroy!
+        def destroy_with_children
+          @destroy_descendants = true
+          destroy
         end
 
         # Provides a formatted version of the reference
@@ -54,6 +99,16 @@ module MongoMapper
         def set_reference(ref)
           self.reference = ref
           set(:reference => ref, :depth => depth)
+        end
+
+        # increases the depth of the node if possible
+        # can't indent if there's nothing before it on the same level (to become the new parent)
+        def indent
+        end
+
+        # decreases the depth of the node if possible
+        # can't outdent further than 1
+        def outdent
         end
 
         # returns the parent for the node
@@ -98,6 +153,18 @@ module MongoMapper
           query         = query_for_reference(reference[0, depth-1])
           query[:depth] = depth
           query[:id]    = {:"$ne" => self.id}
+          scoped_find.all(query)
+        end
+
+        def previous_siblings
+          query = query_for_reference(reference[0, depth-1])
+          query[:"reference.#{depth-1}"] = {:"$lt" => reference.last}
+          scoped_find.all(query)
+        end
+
+        def next_siblings
+          query = query_for_reference(reference[0, depth-1])
+          query[:"reference.#{depth-1}"] = {:"$gt" => reference.last}
           scoped_find.all(query)
         end
 
@@ -179,6 +246,20 @@ module MongoMapper
           else
             self.reference = [1]
           end
+        end
+
+        def delete_descendants_and_renumber_siblings
+          if @destroy_descendants
+            self.children.each do |child|
+              child.destroy_with_children
+            end
+          end
+
+          scope = {}
+          if referenced_tree_options[:scope]
+            scope[referenced_tree_options[:scope]] = self[referenced_tree_options[:scope]]
+          end
+          self.class.renumber_tree(scope)
         end
       end
     end
