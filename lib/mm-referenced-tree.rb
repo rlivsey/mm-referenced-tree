@@ -160,13 +160,17 @@ module MongoMapper
 
         def previous_siblings
           query = query_for_reference(reference[0, depth-1])
-          query[:"reference.#{depth-1}"] = {:"$lt" => reference.last}
+          query[:"reference.#{depth-1}"] = {:"$lt" => reference.last + 1}
+          query[:depth] = depth
+          query[:id] = {:"$ne" => self.id}
           scoped_find.all(query)
         end
 
         def next_siblings
           query = query_for_reference(reference[0, depth-1])
-          query[:"reference.#{depth-1}"] = {:"$gt" => reference.last}
+          query[:"reference.#{depth-1}"] = {:"$gt" => reference.last - 1}
+          query[:depth] = depth
+          query[:id] = {:"$ne" => self.id}
           scoped_find.all(query)
         end
 
