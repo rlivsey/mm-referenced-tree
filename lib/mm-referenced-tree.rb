@@ -13,8 +13,8 @@ module MongoMapper
           write_inheritable_attribute :referenced_tree_options, options
           class_inheritable_reader    :referenced_tree_options
 
-          key :reference, Array
-          key :depth,     Integer
+          key :reference, Array,    :default => [1]
+          key :depth,     Integer,  :default => 1
 
           before_create :assign_reference
           before_create :reposition_subsequent_nodes
@@ -243,7 +243,7 @@ module MongoMapper
         end
 
         def assign_reference
-          return unless reference.blank?
+          return if !new? || reference_changed?
 
           if root_node = roots.last
             self.reference = [root_node.reference[0] + 1]
