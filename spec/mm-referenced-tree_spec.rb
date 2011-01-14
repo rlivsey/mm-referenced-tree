@@ -114,6 +114,20 @@ describe "MongoMapper::Plugins::ReferencedTree" do
         @n_1_1_2_1.reload.reference.should  == [1,2,2,1]
         @n_1_1_3.reload.reference.should    == [1,2,3]
       end
+
+      it "should not affect other trees" do
+        other_account = Account.create(:name => "other")
+        o_1   = other_account.nodes.create!(:reference => [1])
+        o_1_1 = other_account.nodes.create!(:reference => [1,1])
+        o_1_2 = other_account.nodes.create!(:reference => [1,2])
+
+        node = @account.nodes.create(:reference => [1,1])
+
+        o_1.reload.reference.should   == [1]
+        o_1_1.reload.reference.should == [1,1]
+        o_1_2.reload.reference.should == [1,2]
+      end
+
     end
   end
 

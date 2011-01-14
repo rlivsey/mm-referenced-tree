@@ -235,11 +235,7 @@ module MongoMapper
         end
 
         def scoped_find
-          if referenced_tree_options[:scope]
-            self.class.sort(:reference.asc).where(referenced_tree_options[:scope] => self[referenced_tree_options[:scope]])
-          else
-            self.class.sort(:reference.asc)
-          end
+          self.class.sort(:reference.asc).where(apply_scope_to_query({}))
         end
 
         def assign_reference
@@ -280,17 +276,19 @@ module MongoMapper
         end
 
         def renumber_tree
-          scope = {}
-          if referenced_tree_options[:scope]
-            scope[referenced_tree_options[:scope]] = self[referenced_tree_options[:scope]]
-          end
+          self.class.renumber_tree(apply_scope_to_query({}))
+        end
 
-          self.class.renumber_tree(scope)
+        def apply_scope_to_query(query={})
+          if referenced_tree_options[:scope]
+            query[referenced_tree_options[:scope]] = self[referenced_tree_options[:scope]]
+          end
+          query
         end
 
         def reposition_subsequent_nodes
           self.class.set(
-            query_for_reference(reference),
+            apply_scope_to_query(query_for_reference(reference)),
             {:"reference.#{depth-1}" => (reference[depth-1] + 1)}
           )
         end
