@@ -20,7 +20,7 @@ spec = Gem::Specification.new do |s|
 
   # Change these as appropriate
   s.name              = "mm-referenced-tree"
-  s.version           = "0.1.1"
+  s.version           = "0.1.2"
   s.summary           = "Yet another tree plugin for MongoMapper, built with an array of reference numbers"
   s.author            = "Richard Livsey"
   s.email             = "richard@livsey.org"
