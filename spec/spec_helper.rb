@@ -2,10 +2,9 @@ $LOAD_PATH.unshift(File.dirname(__FILE__))
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 
 require 'rubygems'
-gem 'rspec'
+require 'rspec'
 
 require 'mm-referenced-tree'
-require 'spec'
 
 MongoMapper.database = 'mm-referenced-tree-spec'
 
@@ -26,7 +25,7 @@ class Account
   many :nodes
 end
 
-Spec::Runner.configure do |config|
+RSpec.configure do |config|
   config.before(:each) do
     MongoMapper.database.collections.each do |collection|
       unless collection.name.match(/^system\./)
