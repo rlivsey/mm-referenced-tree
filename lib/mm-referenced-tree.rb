@@ -3,7 +3,8 @@ require 'mongo_mapper'
 module MongoMapper
   module Plugins
     module ReferencedTree
-
+      extend ActiveSupport::Concern
+      
       module ClassMethods
         def referenced_tree(options={})
           options.reverse_merge!({
